@@ -1,0 +1,73 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            // Generic build: configure (if needed) then build a single target.
+            // The target name comes from ${input:cppSampleName}, defaulting to
+            // the basename of the currently open .cpp file. Add a new sample
+            // by simply dropping a .cpp into samples/cpp/ — no edits needed.
+            "label": "build: cpp sample",
+            "type": "shell",
+            "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOpenVINO_DIR=${config:openvino.buildDir} && cmake --build build --target ${input:cppSampleName} -j",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            // Build every sample at once.
+            "label": "build: all cpp samples",
+            "type": "shell",
+            "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DOpenVINO_DIR=${config:openvino.buildDir} && cmake --build build -j",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            // Full re-bootstrap (uv venv + setup.sh). Use when deps change.
+            "label": "bootstrap: setup.sh",
+            "type": "shell",
+            "command": "bash setup.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": []
+        }
+    ],
+    "inputs": [
+        {
+            // When triggered via preLaunchTask, recalls the file picker selection
+            // stored by launch.json (key "debugCppSample").
+            // The remembered value is a relative bin path like "samples/thread_pool/foo";
+            // extract just the basename to get the CMake target name.
+            "id": "cppSampleName",
+            "type": "command",
+            "command": "extension.commandvariable.remember",
+            "args": {
+                "key": "debugCppSample",
+                "transform": {
+                    "find": "(?:.*/)?([^/]+)$",
+                    "replace": "$1",
+                    "flags": ""
+                }
+            }
+        }
+    ]
+}

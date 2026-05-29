@@ -1,0 +1,438 @@
+========================================================================
+Complete internal representation of a 4x4 colour image (color_4x4.bmp)
+========================================================================
+
+[Part 1] cv::Mat / numpy attribute reference
+------------------------------------------------------------------------
+  shape          = (4, 4, 3)        # (rows, cols, channels)
+  ndim (~ dims)  = 2                # geometric dims = 2; channels are not a geometric dim
+  rows           = 4                # height
+  cols           = 4                # width
+  channels()     = 3                # numbers stored per cell (B, G, R)
+  dtype          = uint8            # each number is 1 byte, 0..255
+  elemSize       = 3 bytes          # 3 bytes per pixel cell
+  total bytes    = 48 bytes        # 4 * 4 * 3 = 48
+
+[Part 2] Matrix view: each cell is a [B, G, R] triple
+------------------------------------------------------------------------
+                col 0            col 1            col 2            col 3
+      +----------------+----------------+----------------+----------------+
+row0  | [  0,  0,255]   | [  0,255,  0]   | [255,  0,  0]   | [255,255,255]   |
+      +----------------+----------------+----------------+----------------+
+row1  | [  0,  0,  0]   | [  0,255,255]   | [255,255,  0]   | [180,105,255]   |
+      +----------------+----------------+----------------+----------------+
+row2  | [  0,  0,255]   | [  0,  0,255]   | [  0,255,  0]   | [  0,255,  0]   |
+      +----------------+----------------+----------------+----------------+
+row3  | [255,  0,  0]   | [255,  0,  0]   | [255,255,255]   | [  0,  0,  0]   |
+      +----------------+----------------+----------------+----------------+
+
+  Geometrically a 4-row x 4-column 2D matrix (dims/ndim = 2 geometrically).
+  But each cell holds not a single number but [B, G, R] three uint8 values -> channels() = 3.
+
+[Part 3] Per-channel view: split BGR into 3 greyscale matrices
+------------------------------------------------------------------------
+
+  B (blue channel):
+      0    0  255  255
+      0    0  255  180
+      0    0    0    0
+    255  255  255    0
+
+  G (green channel):
+      0  255    0  255
+      0  255  255  105
+      0    0  255  255
+      0    0  255    0
+
+  R (red channel):
+    255    0    0  255
+      0  255    0  255
+    255  255    0    0
+      0    0  255    0
+
+  These three 4x4 "greyscale matrices" stacked together = the original colour image.
+  Mathematically equivalent: "3 numbers per cell" = "3 matrices stacked".
+
+[Part 4] How it is actually stored in memory (1D contiguous byte stream, HWC layout)
+------------------------------------------------------------------------
+  addr  : byte value   pixel position   channel
+    0   :    0        row 0 col 0        B
+    1   :    0        row 0 col 0        G
+    2   :  255        row 0 col 0        R
+    3   :    0        row 0 col 1        B
+    4   :  255        row 0 col 1        G
+    5   :    0        row 0 col 1        R
+    6   :  255        row 0 col 2        B
+    7   :    0        row 0 col 2        G
+    8   :    0        row 0 col 2        R
+    9   :  255        row 0 col 3        B
+   10   :  255        row 0 col 3        G
+   11   :  255        row 0 col 3        R
+  ... (same pattern: the 3 BGR bytes of one pixel are adjacent; the next pixel follows immediately)
+  48 bytes total (4 rows x 4 cols x 3 channels = 48)
+
+[Part 5] Conclusion
+------------------------------------------------------------------------
+  1) A colour image = a matrix with "geometric dims = 2 + 3 numbers per cell";
+     equivalent to three greyscale matrices of the same size stacked together.
+  2) cv::Mat::dims = 2 describes the two geometric dimensions (rows/cols);
+     the channel count (3) is encoded in the element type (CV_8UC3 / Vec3b) and is not a geometric dim.
+  3) Storing a vector per cell is mathematically valid -- this is called
+     "matrix elements are vectors/tensors", equivalent to an H x W x C 3D array;
+     OpenCV simply chose to fold the innermost C into the element type.
+
+========================================================================
+[Part 6-1] channel_B_gray.bmp -- single-channel B matrix (4x4x1)
+========================================================================
+  Description: the B channel produced by cv::split, saved as a 1-channel greyscale image.
+               On screen the image viewer treats the values as brightness;
+               the red/green/blue sub-pixels light up equally with that brightness
+               -> R = G = B -> necessarily black/grey/white.
+
+  -- attributes --
+    shape       = (4, 4)
+    ndim (geom) = 2                # rows x cols
+    rows        = 4
+    cols        = 4
+    channels()  = 1
+    dtype       = uint8
+    type()      = CV_8UC1 (single channel, 1 byte per cell)
+    elemSize    = 1 bytes
+    total bytes = 16
+
+  -- numerical matrix (number in each cell) --
+    row 0:   0    0  255  255
+    row 1:   0    0  255  180
+    row 2:   0    0    0    0
+    row 3: 255  255  255    0
+
+  -- byte stream in memory (HWC contiguous layout) --
+    addr   0: value=  0   pixel(row 0, col 0)
+    addr   1: value=  0   pixel(row 0, col 1)
+    addr   2: value=255   pixel(row 0, col 2)
+    addr   3: value=255   pixel(row 0, col 3)
+    addr   4: value=  0   pixel(row 1, col 0)
+    addr   5: value=  0   pixel(row 1, col 1)
+    addr   6: value=255   pixel(row 1, col 2)
+    addr   7: value=180   pixel(row 1, col 3)
+    addr   8: value=  0   pixel(row 2, col 0)
+    addr   9: value=  0   pixel(row 2, col 1)
+    addr  10: value=  0   pixel(row 2, col 2)
+    addr  11: value=  0   pixel(row 2, col 3)
+    addr  12: value=255   pixel(row 3, col 0)
+    addr  13: value=255   pixel(row 3, col 1)
+    addr  14: value=255   pixel(row 3, col 2)
+    addr  15: value=  0   pixel(row 3, col 3)
+    16 bytes total
+
+========================================================================
+[Part 6-2] channel_G_gray.bmp -- single-channel G matrix (4x4x1)
+========================================================================
+  Description: same as above but with the green channel values. Still displays as greyscale.
+
+  -- attributes --
+    shape       = (4, 4)
+    ndim (geom) = 2                # rows x cols
+    rows        = 4
+    cols        = 4
+    channels()  = 1
+    dtype       = uint8
+    type()      = CV_8UC1 (single channel, 1 byte per cell)
+    elemSize    = 1 bytes
+    total bytes = 16
+
+  -- numerical matrix (number in each cell) --
+    row 0:   0  255    0  255
+    row 1:   0  255  255  105
+    row 2:   0    0  255  255
+    row 3:   0    0  255    0
+
+  -- byte stream in memory (HWC contiguous layout) --
+    addr   0: value=  0   pixel(row 0, col 0)
+    addr   1: value=255   pixel(row 0, col 1)
+    addr   2: value=  0   pixel(row 0, col 2)
+    addr   3: value=255   pixel(row 0, col 3)
+    addr   4: value=  0   pixel(row 1, col 0)
+    addr   5: value=255   pixel(row 1, col 1)
+    addr   6: value=255   pixel(row 1, col 2)
+    addr   7: value=105   pixel(row 1, col 3)
+    addr   8: value=  0   pixel(row 2, col 0)
+    addr   9: value=  0   pixel(row 2, col 1)
+    addr  10: value=255   pixel(row 2, col 2)
+    addr  11: value=255   pixel(row 2, col 3)
+    addr  12: value=  0   pixel(row 3, col 0)
+    addr  13: value=  0   pixel(row 3, col 1)
+    addr  14: value=255   pixel(row 3, col 2)
+    addr  15: value=  0   pixel(row 3, col 3)
+    16 bytes total
+
+========================================================================
+[Part 6-3] channel_R_gray.bmp -- single-channel R matrix (4x4x1)
+========================================================================
+  Description: same as above but with the red channel values. Still displays as greyscale.
+
+  -- attributes --
+    shape       = (4, 4)
+    ndim (geom) = 2                # rows x cols
+    rows        = 4
+    cols        = 4
+    channels()  = 1
+    dtype       = uint8
+    type()      = CV_8UC1 (single channel, 1 byte per cell)
+    elemSize    = 1 bytes
+    total bytes = 16
+
+  -- numerical matrix (number in each cell) --
+    row 0: 255    0    0  255
+    row 1:   0  255    0  255
+    row 2: 255  255    0    0
+    row 3:   0    0  255    0
+
+  -- byte stream in memory (HWC contiguous layout) --
+    addr   0: value=255   pixel(row 0, col 0)
+    addr   1: value=  0   pixel(row 0, col 1)
+    addr   2: value=  0   pixel(row 0, col 2)
+    addr   3: value=255   pixel(row 0, col 3)
+    addr   4: value=  0   pixel(row 1, col 0)
+    addr   5: value=255   pixel(row 1, col 1)
+    addr   6: value=  0   pixel(row 1, col 2)
+    addr   7: value=255   pixel(row 1, col 3)
+    addr   8: value=255   pixel(row 2, col 0)
+    addr   9: value=255   pixel(row 2, col 1)
+    addr  10: value=  0   pixel(row 2, col 2)
+    addr  11: value=  0   pixel(row 2, col 3)
+    addr  12: value=  0   pixel(row 3, col 0)
+    addr  13: value=  0   pixel(row 3, col 1)
+    addr  14: value=255   pixel(row 3, col 2)
+    addr  15: value=  0   pixel(row 3, col 3)
+    16 bytes total
+
+========================================================================
+[Part 6-4] channel_B_color.bmp -- 3 channels (B kept, G/R all zero)
+========================================================================
+  Description: the B channel values are identical to channel_B_gray.bmp, but here the matrix has 3 channels.
+               Only the blue sub-pixel lights up at brightness B; the red and green are off -> displays as pure blue.
+               Same B numbers, different channel interpretation, completely different colours.
+
+  -- attributes --
+    shape       = (4, 4, 3)
+    ndim (geom) = 2                # rows x cols
+    rows        = 4
+    cols        = 4
+    channels()  = 3
+    dtype       = uint8
+    type()      = CV_8UC3 (three channels, 3 bytes per cell, BGR)
+    elemSize    = 3 bytes
+    total bytes = 48
+
+  -- numerical matrix (number in each cell) --
+    row 0: [  0,  0,  0]  [  0,  0,  0]  [255,  0,  0]  [255,  0,  0]
+    row 1: [  0,  0,  0]  [  0,  0,  0]  [255,  0,  0]  [180,  0,  0]
+    row 2: [  0,  0,  0]  [  0,  0,  0]  [  0,  0,  0]  [  0,  0,  0]
+    row 3: [255,  0,  0]  [255,  0,  0]  [255,  0,  0]  [  0,  0,  0]
+
+  -- byte stream in memory (HWC contiguous layout) --
+    addr   0: value=  0   pixel(row 0, col 0) channel B
+    addr   1: value=  0   pixel(row 0, col 0) channel G
+    addr   2: value=  0   pixel(row 0, col 0) channel R
+    addr   3: value=  0   pixel(row 0, col 1) channel B
+    addr   4: value=  0   pixel(row 0, col 1) channel G
+    addr   5: value=  0   pixel(row 0, col 1) channel R
+    addr   6: value=255   pixel(row 0, col 2) channel B
+    addr   7: value=  0   pixel(row 0, col 2) channel G
+    addr   8: value=  0   pixel(row 0, col 2) channel R
+    addr   9: value=255   pixel(row 0, col 3) channel B
+    addr  10: value=  0   pixel(row 0, col 3) channel G
+    addr  11: value=  0   pixel(row 0, col 3) channel R
+    addr  12: value=  0   pixel(row 1, col 0) channel B
+    addr  13: value=  0   pixel(row 1, col 0) channel G
+    addr  14: value=  0   pixel(row 1, col 0) channel R
+    addr  15: value=  0   pixel(row 1, col 1) channel B
+    addr  16: value=  0   pixel(row 1, col 1) channel G
+    addr  17: value=  0   pixel(row 1, col 1) channel R
+    addr  18: value=255   pixel(row 1, col 2) channel B
+    addr  19: value=  0   pixel(row 1, col 2) channel G
+    addr  20: value=  0   pixel(row 1, col 2) channel R
+    addr  21: value=180   pixel(row 1, col 3) channel B
+    addr  22: value=  0   pixel(row 1, col 3) channel G
+    addr  23: value=  0   pixel(row 1, col 3) channel R
+    addr  24: value=  0   pixel(row 2, col 0) channel B
+    addr  25: value=  0   pixel(row 2, col 0) channel G
+    addr  26: value=  0   pixel(row 2, col 0) channel R
+    addr  27: value=  0   pixel(row 2, col 1) channel B
+    addr  28: value=  0   pixel(row 2, col 1) channel G
+    addr  29: value=  0   pixel(row 2, col 1) channel R
+    addr  30: value=  0   pixel(row 2, col 2) channel B
+    addr  31: value=  0   pixel(row 2, col 2) channel G
+    addr  32: value=  0   pixel(row 2, col 2) channel R
+    addr  33: value=  0   pixel(row 2, col 3) channel B
+    addr  34: value=  0   pixel(row 2, col 3) channel G
+    addr  35: value=  0   pixel(row 2, col 3) channel R
+    addr  36: value=255   pixel(row 3, col 0) channel B
+    addr  37: value=  0   pixel(row 3, col 0) channel G
+    addr  38: value=  0   pixel(row 3, col 0) channel R
+    addr  39: value=255   pixel(row 3, col 1) channel B
+    addr  40: value=  0   pixel(row 3, col 1) channel G
+    addr  41: value=  0   pixel(row 3, col 1) channel R
+    addr  42: value=255   pixel(row 3, col 2) channel B
+    addr  43: value=  0   pixel(row 3, col 2) channel G
+    addr  44: value=  0   pixel(row 3, col 2) channel R
+    addr  45: value=  0   pixel(row 3, col 3) channel B
+    addr  46: value=  0   pixel(row 3, col 3) channel G
+    addr  47: value=  0   pixel(row 3, col 3) channel R
+    48 bytes total
+
+========================================================================
+[Part 6-5] channel_G_color.bmp -- 3 channels (G kept, B/R all zero)
+========================================================================
+  Description: only the green sub-pixel lights up -> displays as pure green.
+
+  -- attributes --
+    shape       = (4, 4, 3)
+    ndim (geom) = 2                # rows x cols
+    rows        = 4
+    cols        = 4
+    channels()  = 3
+    dtype       = uint8
+    type()      = CV_8UC3 (three channels, 3 bytes per cell, BGR)
+    elemSize    = 3 bytes
+    total bytes = 48
+
+  -- numerical matrix (number in each cell) --
+    row 0: [  0,  0,  0]  [  0,255,  0]  [  0,  0,  0]  [  0,255,  0]
+    row 1: [  0,  0,  0]  [  0,255,  0]  [  0,255,  0]  [  0,105,  0]
+    row 2: [  0,  0,  0]  [  0,  0,  0]  [  0,255,  0]  [  0,255,  0]
+    row 3: [  0,  0,  0]  [  0,  0,  0]  [  0,255,  0]  [  0,  0,  0]
+
+  -- byte stream in memory (HWC contiguous layout) --
+    addr   0: value=  0   pixel(row 0, col 0) channel B
+    addr   1: value=  0   pixel(row 0, col 0) channel G
+    addr   2: value=  0   pixel(row 0, col 0) channel R
+    addr   3: value=  0   pixel(row 0, col 1) channel B
+    addr   4: value=255   pixel(row 0, col 1) channel G
+    addr   5: value=  0   pixel(row 0, col 1) channel R
+    addr   6: value=  0   pixel(row 0, col 2) channel B
+    addr   7: value=  0   pixel(row 0, col 2) channel G
+    addr   8: value=  0   pixel(row 0, col 2) channel R
+    addr   9: value=  0   pixel(row 0, col 3) channel B
+    addr  10: value=255   pixel(row 0, col 3) channel G
+    addr  11: value=  0   pixel(row 0, col 3) channel R
+    addr  12: value=  0   pixel(row 1, col 0) channel B
+    addr  13: value=  0   pixel(row 1, col 0) channel G
+    addr  14: value=  0   pixel(row 1, col 0) channel R
+    addr  15: value=  0   pixel(row 1, col 1) channel B
+    addr  16: value=255   pixel(row 1, col 1) channel G
+    addr  17: value=  0   pixel(row 1, col 1) channel R
+    addr  18: value=  0   pixel(row 1, col 2) channel B
+    addr  19: value=255   pixel(row 1, col 2) channel G
+    addr  20: value=  0   pixel(row 1, col 2) channel R
+    addr  21: value=  0   pixel(row 1, col 3) channel B
+    addr  22: value=105   pixel(row 1, col 3) channel G
+    addr  23: value=  0   pixel(row 1, col 3) channel R
+    addr  24: value=  0   pixel(row 2, col 0) channel B
+    addr  25: value=  0   pixel(row 2, col 0) channel G
+    addr  26: value=  0   pixel(row 2, col 0) channel R
+    addr  27: value=  0   pixel(row 2, col 1) channel B
+    addr  28: value=  0   pixel(row 2, col 1) channel G
+    addr  29: value=  0   pixel(row 2, col 1) channel R
+    addr  30: value=  0   pixel(row 2, col 2) channel B
+    addr  31: value=255   pixel(row 2, col 2) channel G
+    addr  32: value=  0   pixel(row 2, col 2) channel R
+    addr  33: value=  0   pixel(row 2, col 3) channel B
+    addr  34: value=255   pixel(row 2, col 3) channel G
+    addr  35: value=  0   pixel(row 2, col 3) channel R
+    addr  36: value=  0   pixel(row 3, col 0) channel B
+    addr  37: value=  0   pixel(row 3, col 0) channel G
+    addr  38: value=  0   pixel(row 3, col 0) channel R
+    addr  39: value=  0   pixel(row 3, col 1) channel B
+    addr  40: value=  0   pixel(row 3, col 1) channel G
+    addr  41: value=  0   pixel(row 3, col 1) channel R
+    addr  42: value=  0   pixel(row 3, col 2) channel B
+    addr  43: value=255   pixel(row 3, col 2) channel G
+    addr  44: value=  0   pixel(row 3, col 2) channel R
+    addr  45: value=  0   pixel(row 3, col 3) channel B
+    addr  46: value=  0   pixel(row 3, col 3) channel G
+    addr  47: value=  0   pixel(row 3, col 3) channel R
+    48 bytes total
+
+========================================================================
+[Part 6-6] channel_R_color.bmp -- 3 channels (R kept, B/G all zero)
+========================================================================
+  Description: only the red sub-pixel lights up -> displays as pure red.
+
+  -- attributes --
+    shape       = (4, 4, 3)
+    ndim (geom) = 2                # rows x cols
+    rows        = 4
+    cols        = 4
+    channels()  = 3
+    dtype       = uint8
+    type()      = CV_8UC3 (three channels, 3 bytes per cell, BGR)
+    elemSize    = 3 bytes
+    total bytes = 48
+
+  -- numerical matrix (number in each cell) --
+    row 0: [  0,  0,255]  [  0,  0,  0]  [  0,  0,  0]  [  0,  0,255]
+    row 1: [  0,  0,  0]  [  0,  0,255]  [  0,  0,  0]  [  0,  0,255]
+    row 2: [  0,  0,255]  [  0,  0,255]  [  0,  0,  0]  [  0,  0,  0]
+    row 3: [  0,  0,  0]  [  0,  0,  0]  [  0,  0,255]  [  0,  0,  0]
+
+  -- byte stream in memory (HWC contiguous layout) --
+    addr   0: value=  0   pixel(row 0, col 0) channel B
+    addr   1: value=  0   pixel(row 0, col 0) channel G
+    addr   2: value=255   pixel(row 0, col 0) channel R
+    addr   3: value=  0   pixel(row 0, col 1) channel B
+    addr   4: value=  0   pixel(row 0, col 1) channel G
+    addr   5: value=  0   pixel(row 0, col 1) channel R
+    addr   6: value=  0   pixel(row 0, col 2) channel B
+    addr   7: value=  0   pixel(row 0, col 2) channel G
+    addr   8: value=  0   pixel(row 0, col 2) channel R
+    addr   9: value=  0   pixel(row 0, col 3) channel B
+    addr  10: value=  0   pixel(row 0, col 3) channel G
+    addr  11: value=255   pixel(row 0, col 3) channel R
+    addr  12: value=  0   pixel(row 1, col 0) channel B
+    addr  13: value=  0   pixel(row 1, col 0) channel G
+    addr  14: value=  0   pixel(row 1, col 0) channel R
+    addr  15: value=  0   pixel(row 1, col 1) channel B
+    addr  16: value=  0   pixel(row 1, col 1) channel G
+    addr  17: value=255   pixel(row 1, col 1) channel R
+    addr  18: value=  0   pixel(row 1, col 2) channel B
+    addr  19: value=  0   pixel(row 1, col 2) channel G
+    addr  20: value=  0   pixel(row 1, col 2) channel R
+    addr  21: value=  0   pixel(row 1, col 3) channel B
+    addr  22: value=  0   pixel(row 1, col 3) channel G
+    addr  23: value=255   pixel(row 1, col 3) channel R
+    addr  24: value=  0   pixel(row 2, col 0) channel B
+    addr  25: value=  0   pixel(row 2, col 0) channel G
+    addr  26: value=255   pixel(row 2, col 0) channel R
+    addr  27: value=  0   pixel(row 2, col 1) channel B
+    addr  28: value=  0   pixel(row 2, col 1) channel G
+    addr  29: value=255   pixel(row 2, col 1) channel R
+    addr  30: value=  0   pixel(row 2, col 2) channel B
+    addr  31: value=  0   pixel(row 2, col 2) channel G
+    addr  32: value=  0   pixel(row 2, col 2) channel R
+    addr  33: value=  0   pixel(row 2, col 3) channel B
+    addr  34: value=  0   pixel(row 2, col 3) channel G
+    addr  35: value=  0   pixel(row 2, col 3) channel R
+    addr  36: value=  0   pixel(row 3, col 0) channel B
+    addr  37: value=  0   pixel(row 3, col 0) channel G
+    addr  38: value=  0   pixel(row 3, col 0) channel R
+    addr  39: value=  0   pixel(row 3, col 1) channel B
+    addr  40: value=  0   pixel(row 3, col 1) channel G
+    addr  41: value=  0   pixel(row 3, col 1) channel R
+    addr  42: value=  0   pixel(row 3, col 2) channel B
+    addr  43: value=  0   pixel(row 3, col 2) channel G
+    addr  44: value=255   pixel(row 3, col 2) channel R
+    addr  45: value=  0   pixel(row 3, col 3) channel B
+    addr  46: value=  0   pixel(row 3, col 3) channel G
+    addr  47: value=  0   pixel(row 3, col 3) channel R
+    48 bytes total
+
+========================================================================
+[Summary] single channel vs. three channels: identical numbers -> completely different display
+========================================================================
+  channel_B_gray.bmp  shape 4x4x1  -> displays as greyscale
+  channel_B_color.bmp shape 4x4x3  -> displays as pure blue
+  The 16 B-channel numbers are identical in both files; the only difference is the shape/channel count.
+  -> Colour is not determined by the data alone; it is decided by
+     'data + channel interpretation + screen sub-pixel emission rules' together.

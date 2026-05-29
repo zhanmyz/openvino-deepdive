@@ -1,0 +1,15 @@
+{
+    // Project-specific settings — all OpenVINO paths defined here.
+    // Change these when switching to a different OpenVINO build.
+
+    // Root of the OpenVINO source tree (for sourceFileMap in debugger)
+    "openvino.sourceDir": "openvino",
+    // CMake build output directory (for find_package in tasks.json)
+    "openvino.buildDir": "openvino/build",
+    // Directory containing the Debug .so files (for LD_LIBRARY_PATH at runtime)
+    "openvino.libDir": "openvino/bin/intel64/Debug",
+    // Python bindings path
+    "openvino.pythonDir": "openvino/bin/intel64/Debug/python",
+    // OVC tool path
+    "openvino.ovcDir": "openvino/tools/ovc"
+}
