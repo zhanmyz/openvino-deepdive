@@ -1,11 +1,19 @@
-# openvino-deepdive
+<p align="center">
+<img src="https://img.shields.io/badge/⚡-Deep%20Dive-blueviolet?style=for-the-badge&logo=intel&logoColor=white&labelColor=1a1a2e&color=6c3baa" height="60" alt="Deep Dive">
+</p>
 
-> Dissecting OpenVINO's runtime internals — threading architecture, stream executors, NUMA-aware scheduling, and inference pipelines — explained from first principles with runnable C++ demos that mirror production source patterns.
+<h1 align="center">openvino-deepdive</h1>
 
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
-[![CMake](https://img.shields.io/badge/CMake-3.16%2B-blue.svg)](https://cmake.org/)
-[![OpenVINO](https://img.shields.io/badge/OpenVINO-2024.x-purple.svg)](https://github.com/openvinotoolkit/openvino)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p align="center">
+<em>🔬 Dissecting OpenVINO's runtime internals — threading architecture, stream executors, NUMA-aware scheduling, and inference pipelines — explained from first principles with runnable C++ demos that mirror production source patterns.</em>
+</p>
+
+<p align="center">
+<a href="https://en.cppreference.com/w/cpp/17"><img src="https://img.shields.io/badge/C%2B%2B-17-blue.svg" alt="C++17"></a>
+<a href="https://cmake.org/"><img src="https://img.shields.io/badge/CMake-3.16%2B-blue.svg" alt="CMake"></a>
+<a href="https://github.com/openvinotoolkit/openvino"><img src="https://img.shields.io/badge/OpenVINO-2024.x-purple.svg" alt="OpenVINO"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+</p>
 
 ---
 
@@ -25,24 +33,23 @@ This repository provides a hands-on lab environment for understanding OpenVINO's
 
 ## Table of Contents
 
-- [openvino-deepdive](#openvino-deepdive)
-  - [Overview](#overview)
-  - [Table of Contents](#table-of-contents)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Quick Setup](#quick-setup)
-  - [Project Structure](#project-structure)
-  - [C++ Samples](#c-samples)
-  - [Python Utilities](#python-utilities)
-  - [Documentation](#documentation)
-  - [Building](#building)
-    - [Full build (all targets)](#full-build-all-targets)
-    - [VS Code integration](#vs-code-integration)
-  - [Running Samples](#running-samples)
-    - [Object Detection (YOLO)](#object-detection-yolo)
-    - [Thread Pool Demos](#thread-pool-demos)
-  - [Contributing](#contributing)
-  - [License](#license)
+- [Overview](#overview)
+- [Table of Contents](#table-of-contents)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Quick Setup](#quick-setup)
+- [Project Structure](#project-structure)
+- [C++ Samples](#c-samples)
+- [Python Utilities](#python-utilities)
+- [Documentation](#documentation)
+- [Building](#building)
+  - [Full build (all targets)](#full-build-all-targets)
+  - [VS Code integration](#vs-code-integration)
+- [Running Samples](#running-samples)
+  - [Object Detection (YOLO)](#object-detection-yolo)
+  - [Thread Pool Demos](#thread-pool-demos)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
