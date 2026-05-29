@@ -1,0 +1,3 @@
+[submodule "third_party/validation-lab-openvino"]
+	path = third_party/validation-lab-openvino
+	url = https://github.com/zhanmyz/validation-lab-openvino.git

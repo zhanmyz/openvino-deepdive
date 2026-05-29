@@ -1,0 +1,208 @@
+{
+    // Generic debug configuration.
+    // All OpenVINO paths are defined in settings.json — change them there.
+    // - Press F5 → file picker shows all samples (regardless of open file).
+    // - Builds only the selected target, then launches it.
+    // - Prompts for runtime args (model / input / device) with sensible defaults.
+    // Requires extension: rioj7.command-variable
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C++ Debug: pick sample (with args)",
+            "type": "cppdbg",
+            "request": "launch",
+            "preLaunchTask": "build: cpp sample",
+            "program": "${workspaceFolder}/bin/${input:cppSampleName}",
+            "args": [
+                "${input:modelPath}",
+                "${input:inputPath}",
+                "${input:device}"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${config:openvino.libDir}:${env:LD_LIBRARY_PATH}"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable GDB pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Allow breakpoints in not-yet-loaded shared libraries",
+                    "text": "-gdb-set breakpoint pending on",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Use Intel disassembly flavor",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "sourceFileMap": {
+                "${config:openvino.sourceDir}": "${config:openvino.sourceDir}"
+            }
+        },
+        {
+            "name": "C++ Debug: pick sample (no args)",
+            "type": "cppdbg",
+            "request": "launch",
+            "preLaunchTask": "build: cpp sample",
+            "program": "${workspaceFolder}/bin/${input:cppSampleName}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${config:openvino.libDir}:${env:LD_LIBRARY_PATH}"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable GDB pretty printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Allow breakpoints in not-yet-loaded shared libraries",
+                    "text": "-gdb-set breakpoint pending on",
+                    "ignoreFailures": true
+                }
+            ],
+            "sourceFileMap": {
+                "${config:openvino.sourceDir}": "${config:openvino.sourceDir}"
+            }
+        },
+        {
+            "name": "Python Debug: pick sample",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${input:pythonSampleFile}",
+            "console": "integratedTerminal",
+            "args": [
+                "${input:modelPath}",
+                "${input:inputPath}",
+                "${input:device}"
+            ],
+            "env": {
+                "PYTHONPATH": "${config:openvino.pythonDir}:${config:openvino.ovcDir}:${env:PYTHONPATH}",
+                "LD_LIBRARY_PATH": "${config:openvino.libDir}:${env:LD_LIBRARY_PATH}",
+                "PATH": "${config:openvino.libDir}:${config:openvino.ovcDir}/openvino/tools/ovc:${env:PATH}"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            // C++ sample picker — returns relative path under bin/ (e.g. "samples/thread_pool/foo").
+            // Uses ${transform:stripPath} to strip "cpp/" and ".cpp" suffix
+            // from ${relativeFile}, so the result maps directly to the binary path under bin/.
+            // The pickFile sub-option has its own transform for the same stripping.
+            "id": "cppSampleName",
+            "type": "command",
+            "command": "extension.commandvariable.pickStringRemember",
+            "args": {
+                "key": "debugCppSample",
+                "description": "Select C++ sample to debug (Enter = current file)",
+                "options": [
+                    {
+                        "label": "Current file: ${fileBasenameNoExtension}",
+                        "value": "${transform:stripPath}"
+                    },
+                    {
+                        "label": "Pick from list...",
+                        "value": "${pickFile:cppFiles}"
+                    }
+                ],
+                "rememberTransformed": true,
+                "transform": {
+                    "stripPath": {
+                        "text": "${relativeFile}",
+                        "find": "^samples/cpp/(.*)\\.cpp$",
+                        "replace": "samples/$1"
+                    }
+                },
+                "pickFile": {
+                    "cppFiles": {
+                        "include": "samples/cpp/**/*.cpp",
+                        "exclude": "{**/build/**,**/CMakeLists.txt}",
+                        "display": "relativePath",
+                        "description": "Select C++ sample",
+                        "transform": {
+                            "text": "${relativeFile}",
+                            "find": "^samples/cpp/(.*)\\.cpp$",
+                            "replace": "samples/$1"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            // File picker for Python samples.
+            "id": "pythonSampleFile",
+            "type": "command",
+            "command": "extension.commandvariable.file.pickFile",
+            "args": {
+                "include": "samples/python/**/*.py",
+                "exclude": "{**/build/**,**/__pycache__/**}",
+                "display": "relativePath",
+                "description": "Select Python sample to debug",
+                "transform": {
+                    "text": "${file}"
+                }
+            }
+        },
+        {
+            // Model picker — default is pre-highlighted, press Enter to accept.
+            // Add new models to the options list when you download them.
+            "id": "modelPath",
+            "type": "command",
+            "command": "extension.commandvariable.pickStringRemember",
+            "args": {
+                "key": "debugModelPath",
+                "description": "Select model file (Enter = use highlighted default)",
+                "default": "models/yolo/yolo26n_openvino_model/yolo26n.xml",
+                "options": [
+                    "models/yolo/yolo26n_openvino_model/yolo26n.xml",
+                    "models/yolo/yolo26n.pt"
+                ]
+            }
+        },
+        {
+            // Image picker — default is pre-highlighted, press Enter to accept.
+            // Add new images to the options list when you add them to data/.
+            "id": "inputPath",
+            "type": "command",
+            "command": "extension.commandvariable.pickStringRemember",
+            "args": {
+                "key": "debugInputPath",
+                "description": "Select input image (Enter = use highlighted default)",
+                "default": "data/images/person/person_detection.png",
+                "options": [
+                    "data/images/person/person_detection.png",
+                    "data/images/person/person-bicycle-car-detection.bmp",
+                    "data/images/banana.jpg",
+                    "data/images/car_1.bmp",
+                    "data/images/3.png"
+                ]
+            }
+        },
+        {
+            "id": "device",
+            "type": "pickString",
+            "description": "Inference device",
+            "options": ["GPU", "CPU", "NPU"],
+            "default": "GPU"
+        }
+    ]
+}
