@@ -210,6 +210,7 @@ Must be checked during installation:
 
 
 ### Build Source Code
+
 ```bash
 git clone https://github.com/openvinotoolkit/openvino.git
 cd openvino
@@ -220,14 +221,56 @@ mkdir build && cd build
 
 > **NOTE:** This is a hard restriction in OpenVINO's CMake — on Windows, `pyopenvino` (`.pyd`) cannot be built in Debug configuration because the debug Python library (`python312_d.lib`) is not part of the standard Python install. It must be built as Release or RelWithDebInfo.
 
-#### Build OpenVINO CPP Code for Debug
-Execute in **x64 Native Tools Command Prompt**:
+#### 1. Build OpenVINO CPP Code
+
+##### 前置条件
+
+- Visual Studio 2022 Professional
+- CMake (VS 自带路径: `C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`)
+
+##### (Optional) 配置 OpenCL 支持 (`-use_device_mem`)
+
+If you want to use `-use_device_mem` parameter in the `benchmark_app` command, then need to execute following commands.
+
+Just make sure that CMake can find the OpenCL C++ header files. But there is a key point: header files cannot be placed in the OpenVINO source tree, otherwise CMake will report an `INTERFaced INCLUDE-DIRECTORIES fixed in source directory` error.
+
+The simplest method is to copy the OpenCL header files already in the OpenVINO source tree to a separate directory and simulate the layout of `C:\opencl` on a CI machine.
+
+Execute the following command in PowerShell:
+```powershell
+# 1. Create a separate OpenCL SDK directory (C:\opencl, simulating CI)
+mkdir C:\opencl\include\CL -Force
+
+# 2. Copy C headers
+Copy-Item "C:\Users\gta\Downloads\openvino\thirdparty\ocl\cl_headers\CL\*" "C:\opencl\include\CL\" -Force
+
+# 3. Copy C++ headers (opencl.hpp and cl2.hpp)
+Copy-Item "C:\Users\gta\Downloads\openvino\thirdparty\ocl\clhpp_headers\include\CL\*" "C:\opencl\include\CL\" -Force
+```
+
+##### CMake Configure（首次配置 / 从零开始）
+
+打开 **x64 Native Tools Command Prompt for VS 2022**（开始菜单搜索），该终端已预设 cl.exe、link.exe、MSBuild 等编译器路径到 PATH。
 
 ```cmd
-cd c:/Users/gta/Desktop/openvino/build
+:: 设置代理（Intel 内网需要）
+set http_proxy=http://<Proxy>:<Port>
+set https_proxy=http://<Proxy>:<Port>
+set HTTP_PROXY=http://<Proxy>:<Port>
+set HTTPS_PROXY=http://<Proxy>:<Port>
+set CMAKE_NETRC=0
+set CMAKE_TLS_VERIFY=OFF
+
+:: (Optional) 如果需要 -use_device_mem，设置 OCL_ROOT
+set OCL_ROOT=C:\opencl
+
+cd C:\Users\gta\Downloads\openvino\build
+
+:: (Optional) 删除旧 cache entries（仅在重新配置 OpenCL 时需要）
+cmake -U OpenCL_HPP_INCLUDE_DIR -U CL2_HPP_INCLUDE_DIR .
 
 cmake -G "Visual Studio 17 2022" -A x64 ^
-  -DCMAKE_BUILD_TYPE=Debug ^
+  -DCMAKE_BUILD_TYPE=Release ^
   -DPYTHON_EXECUTABLE="C:/Python312/python" ^
   -DENABLE_INTEL_CPU=ON ^
   -DENABLE_INTEL_GPU=ON ^
@@ -236,11 +279,116 @@ cmake -G "Visual Studio 17 2022" -A x64 ^
   -DENABLE_TESTS=ON ^
   -DENABLE_PYTHON=OFF ^
   -DENABLE_DEBUG_CAPS:BOOL=ON ^
-  -DHTTP_PROXY=http://<proxy>:<port> ^
-  -DHTTPS_PROXY=http://<proxy>:<port> ^
+  -DENABLE_API_VALIDATOR=OFF ^
+  -DHTTP_PROXY=http://<Proxy>:<Port> ^
+  -DHTTPS_PROXY=http://<Proxy>:<Port> ^
   ..
+```
 
-cmake --build . --config Debug -j12
+> **注**: `-G "Visual Studio 17 2022"` 生成 MSBuild 项目（`.sln` + `.vcxproj`），不是 Ninja。这意味着构建时底层调用的是 MSBuild.exe。
+
+> Add `-DENABLE_API_VALIDATOR=OFF` in the cmake configuration command to disable the API validator.
+> The reason is that there is a post step in the OpenVINO build process that runs apivalidation.exe (from the Windows SDK) to check if the DLL compiles with the OneCore API specification.
+> In `Debug` mode, the compiler links to the debug version `C runtime library`:
+>   * vcruntime140d.dll (note the d suffix)
+>   * ucrtbased.dll (note the d suffix)
+>
+> These debug version DLLs are not on the UniversalDDIs.xml whitelist, resulting in API validation failure. This is a known false positive for Debug builds - API validators only make sense for `Release` builds.
+
+##### MSBuild 并行参数说明
+
+| 参数形式 | 含义 | 适用场景 |
+|----------|------|----------|
+| `-j16` (CMake 3.12+) | 等价于传递 `/m:16` 给 MSBuild，控制**项目间**并行数 | x64 Native Tools Command Prompt (cmd) |
+| `-- /m` | 透传给 MSBuild，不限数量的项目间并行 | PowerShell |
+| `-- /p:CL_MPCount=16` | 透传给 MSBuild，控制**项目内** cl.exe 并行编译文件数（`/MP16`） | PowerShell |
+| `-j16 -- /p:CL_MPCount=16` | **两者结合**: 项目间 16 并行 + 项目内 16 文件并行 | cmd 或 PowerShell |
+
+**关键区别**: `-j16` 只控制项目间并行（同时编 N 个 .vcxproj），`/p:CL_MPCount=16` 控制单个项目内同时编 16 个 .cpp。两者叠加才能最大化 CPU 利用率。
+
+##### Release 构建
+
+**方法 A: PowerShell**（需指定 cmake 完整路径）
+```powershell
+cd C:\Users\gta\Downloads\openvino\build
+$cmake = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+& $cmake --build . --config Release --target openvino_ir_frontend openvino_intel_gpu_plugin benchmark_app -- /m "/p:CL_MPCount=16"
+```
+
+**方法 B: x64 Native Tools Command Prompt** (cmd, cmake 已在 PATH)
+```cmd
+cd C:\Users\gta\Downloads\openvino\build
+cmake --build . --config Release --target openvino_ir_frontend openvino_intel_gpu_plugin benchmark_app -j16 -- /p:CL_MPCount=16
+```
+
+##### Debug 构建
+
+Debug 构建需要额外步骤：oneDNN GPU 库是 ExternalProject，默认只编译 Release 版本。需要先将 Debug 版 oneDNN lib 复制到 install 路径：
+
+**方法 A: PowerShell**
+```powershell
+cd C:\Users\gta\Downloads\openvino\build
+
+# 步骤1: 将 Debug 版 oneDNN GPU lib 复制到链接器搜索路径
+Copy-Item -Force `
+    "src\plugins\intel_gpu\thirdparty\onednn_gpu_build\src\Debug\openvino_onednn_gpu.lib" `
+    "src\plugins\intel_gpu\thirdparty\onednn_gpu_install\lib\openvino_onednn_gpu.lib"
+
+# 步骤2: 构建 Debug
+$cmake = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+& $cmake --build . --config Debug --target openvino_ir_frontend openvino_intel_gpu_plugin benchmark_app -- /m "/p:CL_MPCount=16"
+```
+
+**方法 B: x64 Native Tools Command Prompt** (cmd)
+```cmd
+cd C:\Users\gta\Downloads\openvino\build
+
+:: 步骤1: 复制 Debug 版 oneDNN lib
+copy /Y "src\plugins\intel_gpu\thirdparty\onednn_gpu_build\src\Debug\openvino_onednn_gpu.lib" "src\plugins\intel_gpu\thirdparty\onednn_gpu_install\lib\openvino_onednn_gpu.lib"
+
+:: 步骤2: 构建 Debug
+cmake --build . --config Debug --target openvino_ir_frontend openvino_intel_gpu_plugin benchmark_app -j16 -- /p:CL_MPCount=16
+```
+
+> **注意**: Debug build 输出带 `d` 后缀：`openvino_intel_gpu_plugind.dll`, `openvinod.dll`, `benchmark_app.exe`（无后缀但链接 Debug 库）
+
+##### 切换 Debug / Release 构建
+
+**如果需要切回 Release 构建**，需恢复 oneDNN lib：
+```powershell
+# PowerShell:
+Copy-Item -Force `
+    "src\plugins\intel_gpu\thirdparty\onednn_gpu_build\src\Release\openvino_onednn_gpu.lib" `
+    "src\plugins\intel_gpu\thirdparty\onednn_gpu_install\lib\openvino_onednn_gpu.lib"
+```
+```cmd
+:: cmd:
+copy /Y "src\plugins\intel_gpu\thirdparty\onednn_gpu_build\src\Release\openvino_onednn_gpu.lib" "src\plugins\intel_gpu\thirdparty\onednn_gpu_install\lib\openvino_onednn_gpu.lib"
+```
+
+##### 验证构建结果
+
+```powershell
+# 查看生成的 Debug / Release 目录
+ls C:\Users\gta\Downloads\openvino\bin\intel64
+    Directory: C:\Users\gta\Downloads\openvino\bin\intel64
+    Mode                 LastWriteTime         Length Name
+    ----                 -------------         ------ ----
+    d-----          6/8/2026   6:20 AM                Debug
+    d-----          6/8/2026   8:08 AM                Release
+```
+
+##### Debug 运行环境设置
+
+```powershell
+# PowerShell
+$env:PATH = "C:\Users\gta\Downloads\openvino\bin\intel64\Debug;C:\Users\gta\Downloads\openvino\temp\Windows_AMD64\tbb\bin;$env:PATH"
+```
+
+```cmd
+:: x64 Native Tools Command Prompt (cmd)
+set PATH=C:\Users\gta\Downloads\openvino\bin\intel64\Debug;%PATH%
+set PATH=C:\Users\gta\Downloads\openvino\temp\Windows_AMD64\tbb\bin;%PATH%
 ```
 
 #### Build OpenVINO Python Code for E2E test
