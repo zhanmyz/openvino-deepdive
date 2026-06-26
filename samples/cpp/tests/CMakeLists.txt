@@ -10,7 +10,6 @@ foreach(SRC ${TESTS_SOURCES})
     set_target_properties(${SAMPLE_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/samples/tests")
     target_link_libraries(${SAMPLE_NAME} PRIVATE
-        openvino::runtime
         ${OpenCV_LIBS}
         Threads::Threads)
     message(STATUS "Test registered: ${SAMPLE_NAME}")
